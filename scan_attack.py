@@ -6,14 +6,13 @@ import itertools
 seed = 100
 dut = des.DESWithScanChain(seed)
 
+#do a test run of the DES with a given input 
 test_code = "0BADC0DEDEADC0DE"
 print("Input: " + test_code)
-#do a test run of the DES with the given input and output
 (check_ciphertext, _) = dut.RunEncryptOrDecrypt(test_code)
 print("Ciphertext: " + check_ciphertext)
 (plaintext, _) = dut.RunEncryptOrDecrypt(check_ciphertext, do_encrypt=False)
 print("Plaintext: " + plaintext)
-
 
 #attack step 1 - determine locations of input and L/R register
 input_scan_indices = [None] * 64
@@ -84,6 +83,7 @@ def sboxes_output_to_possible_inputs(sboxes_output, sboxes_input) -> List[list]:
                 col & 0b1,
                 row & 0b1
             ]
+            #for each bit, undo the XOR operation
             for k in range(len(possible_input)):
                 possible_input[k] = possible_input[k] ^ sbox_input[k]
             possible_sbox_inputs.append(possible_input)
@@ -112,12 +112,13 @@ for i in range(len(special_inputs)):
 
 special_results_after_sbox = []
 for special_input in special_inputs:
+    #run 3 rounds of the encryption over the special input
     (_, scans) = dut.RunEncryptOrDecrypt(special_input, True, 3)
-    #print the content of the R register for scan[1]
-    (l_reg, r_reg) = read_scan_l_r(left_r_scan_indices, right_r_scan_indices, scans[2])
-    #print("L1: " + str(l_reg))
-    #print("R1: " + str(r_reg))
 
+    #using the scan chain layout we computed earlier, extract the values of L and R register
+    (l_reg, r_reg) = read_scan_l_r(left_r_scan_indices, right_r_scan_indices, scans[2])
+   
+    #undo the P permutation to get the values directly emitted from the SBox before stored in R register
     special_result = [None]*32
     for i in range(32):
         special_result[des.P_PERM[i]-1] = r_reg[i]
@@ -128,7 +129,11 @@ for special_input in special_inputs:
 #special result 0 tells us the 4 possible inputs, special result 1 and 2 are for pairing down those 4 inputs
 sbox_possible_key_values = []
 for i in range(len(special_results_after_sbox)):
-    sbox_possible_key_values.append(sboxes_output_to_possible_inputs(special_results_after_sbox[i], special_inputs_permuted[i]))
+    sbox_possible_key_values.append(
+        sboxes_output_to_possible_inputs(
+            special_results_after_sbox[i], special_inputs_permuted[i]
+        )
+    )
 
 #data stored as 
 # sbox_key_values[special inputs[per sbox possibility[sbox bits]]]
@@ -168,60 +173,57 @@ roundkey_1_actual_val = 0
 for i in range(48):
     roundkey_1_actual_val |= ((roundkey_1_actual_b[i]=="1") << (47 - i))
 
-print("Actual key: " + dut.key_hex)
-print("Round1 key: %012X" % roundkey_1_actual_val)
+#print("Actual key: " + dut.key_hex)
+#print("Round1 key: %012X" % roundkey_1_actual_val)
 
 possible_keys = []
 for possible_roundkey_round1 in possible_roundkeys_round1:
-    #convert the binary list to a hex string
-    possible_roundkey_round1_val = 0
-    for i in range(48):
-        possible_roundkey_round1_val |= (possible_roundkey_round1[i] << (47 - i))
+    #derive every possible key that could be used to generate this roundkey
 
-    print("Possible round key: %012X" % possible_roundkey_round1_val)
-
+    #first, undo the PC2 permutation
     key1 = [None]*56
     for i in range(48):
         key1[des.KEY_PC2[i]-1] = possible_roundkey_round1[i]
     
-    #right rotate each half of the key
+    #now undo the two half-key rotations by
+    # right rotating each half of the key
     key1_left = key1[:28]
     key1_right = key1[28:]
     key1_left = key1_left[-1:] + key1_left[:-1]
     key1_right = key1_right[-1:] + key1_right[:-1]
     key1 = key1_left + key1_right
 
+    #now undo the PC1 permutation
     key = [None]*64
     for i in range(56):
         key[des.KEY_PC1[i]-1] = key1[i]
 
-
-    # key.insert(56, 'P')
-    # key.insert(49, 'P')
-    # key.insert(42, 'P')
-    # key.insert(35, 'P')
-    # key.insert(28, 'P')
-    # key.insert(21, 'P')
-    # key.insert(14, 'P')
-    # key.insert(7, 'P')
-
+    #the format of the key is such that it has 64 bits, 
+    # but only 48 of them are currently filled with values.
+    # We will create all possible keys by taking the cartesian product
+    # of all possible values for the 8 unfilled key bits (Parity bits are not used).
+    
+    #Prepare the cartesian product by creating a list of lists of 
+    # known and possible values for the unfilled key bits.
     combined_key_possibilities = []
     for i in range(64):
         if key[i] == None:
             if (i+1) % 8 != 0:
-                combined_key_possibilities.append([0,1])
+                combined_key_possibilities.append([0,1]) #Unknown key bit
             else:
-                combined_key_possibilities.append([None])
+                combined_key_possibilities.append([None]) #Parity bit
         else:
-            combined_key_possibilities.append([key[i]])
+            combined_key_possibilities.append([key[i]]) #Known key bit
     
     print(combined_key_possibilities)
     
     for components in itertools.product(*combined_key_possibilities):
+        #Combine all key bits into a single key
         possible_key_bits = []
         for component in components:
             possible_key_bits.append(component)
 
+        #Calculate the parity bits
         for i in range(8):
             val_bits = possible_key_bits[i*8:(i+1)*8-1]
             parity_bit = 0
@@ -229,11 +231,13 @@ for possible_roundkey_round1 in possible_roundkeys_round1:
                 parity_bit ^= bit
             possible_key_bits[i*8+7] = parity_bit
         
+        #Convert the binary list into a hex string
         key_val = 0
         for i in range(64):
             key_val |= (possible_key_bits[i] << (63-i))
-        
         possible_key_val = '%016X' % key_val
+
+        #store the key
         possible_keys.append(possible_key_val)
 
 print("there are %d possible keys" % len(possible_keys))
@@ -250,3 +254,5 @@ for possible_key in possible_keys:
         break
 
 print("Check answer: key is " + dut.key_hex)
+if(possible_key == dut.key_hex):
+    print("key is correct")
