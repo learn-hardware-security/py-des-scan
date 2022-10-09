@@ -2,6 +2,8 @@
 
 This repository contains the source code and Python package for the (under review) 2022 Embedded Systems Week paper "High-Level Approaches to Hardware Security: A Tutorial" case study on DES scan chain attacks (Case Study 1).
 
+If you would prefer, a google colab of this code is also available: https://colab.research.google.com/drive/1CuOgh_x6TBXi6j4rFsNfHH2NsUDgaYId
+
 ### How to use this repository
 
 First, create a folder/file on your computer where you will work.
