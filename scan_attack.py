@@ -3,17 +3,18 @@ from typing import *
 import itertools
 #define hardware
 
-seed = 100
+seed = 300
 dut = des.DESWithScanChain(seed)
 
 #do a test run of the DES with a given input 
-test_code = "0BADC0DEDEADC0DE"
+test_code = "903D3D8E2220CDDB"
 print("Input: " + test_code)
-(check_ciphertext, _) = dut.RunEncryptOrDecrypt(test_code)
+(check_ciphertext, _) = dut.RunEncryptOrDecrypt(test_code, do_encrypt=True)
 print("Ciphertext: " + check_ciphertext)
-(plaintext, _) = dut.RunEncryptOrDecrypt(check_ciphertext, do_encrypt=False)
-print("Plaintext: " + plaintext)
+#(plaintext, _) = dut.RunEncryptOrDecrypt(check_ciphertext, do_encrypt=True)
+#print("Plaintext: " + plaintext)
 
+#exit(0)
 #############END LISTING 1
 
 #############LISTING 2
@@ -134,9 +135,17 @@ def sboxes_output_to_possible_inputs(sboxes_output, sboxes_xor_input) -> List[li
 #############LISTING 5
 #Use three specially crafted inputs to determine the unique round key R1
 # they ensure L1 is 0, and R1 has a special value in it
+
+#these are the published values, but
+#  certain inputs fail to be distinguished uniquely by the published values
+#special_inputs = ["0000000000000000",
+#                  "0000AA000000AA00",
+#                  "8220000A8002200A"]
+
+#these values, determined after publication, are better for the attack
 special_inputs = ["0000000000000000",
-                  "0000AA000000AA00",
-                  "8220000A8002200A"]
+                  "000000AA00000000",
+                  "2802000020A20028"]
 
 #Permute the special_inputs to compute the values that will be XORed with the
 # round-key R1 before the s-boxes (i.e. compute the value 'a' in Fig. 2)
@@ -371,19 +380,25 @@ print("There are %d possible keys." % len(possible_keys))
 
 #############END LISTING 10
 
-#if(dut.key_hex in possible_keys):
-#    print("key is in the list of possible keys")
-#else:
-#    print("key is not in the list of possible keys")
+if(dut.key_hex in possible_keys):
+   print("key is in the list of possible keys")
+else:
+   print("key is not in the list of possible keys")
 
 #############LISTING 11
 
 print("Brute-force checking %d possible keys." % len(possible_keys))
 for possible_key in possible_keys:
+    #print("Checking key %s, it is the possible key: %s" % (possible_key, possible_key == dut.key_hex))
     pos_des = des.DESWithScanChain(force_key=possible_key)
     (test_ciphertext, _) = pos_des.RunEncryptOrDecrypt(test_code)
     if(test_ciphertext == check_ciphertext):
         print("Found the key. It is %s" % possible_key)
+        break
+    elif possible_key == dut.key_hex:
+        print("The key is correct, but the ciphertexts do not match.")
+        print("The correct ciphertext is %s" % check_ciphertext)
+        print("The incorrect ciphertext is %s" % test_ciphertext)
         break
 
 print("Checking the answer. The embedded secret key was " + dut.key_hex)

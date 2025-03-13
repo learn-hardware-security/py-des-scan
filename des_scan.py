@@ -316,6 +316,7 @@ class DESWithScanChain():
         key = hex2bin(self.key_hex)
 
         # getting 56 bit key from 64 bit using the parity bits
+        #print("Key before parity bits", bin2hex(key))
         key = permute(key, KEY_PC1, 56)
         #print("Key after initial permutation", bin2hex(key))
 
@@ -336,7 +337,7 @@ class DESWithScanChain():
 
             # Compression of key from 56 to 48 bits
             round_key = permute(combine_str, KEY_PC2, 48)
-            #print("Round_key", round_key)
+            # print("Round_key", bin2hex(round_key))
 
             self.roundkeys_b.append(round_key)
 
@@ -423,10 +424,10 @@ if __name__ == "__main__":
     print("Key: ", dut.key_hex)
     print("Input: ", pt)
 
-    (cipher, scans) = dut.EncryptOrDecrypt64BitInput(pt, True, 18)
+    (cipher, scans) = dut.RunEncryptOrDecrypt(pt, True, 18)
 
     print("Cipher Text : ", cipher)
 
     print("Decryption")
-    (plain, scans) = dut.EncryptOrDecrypt64BitInput(cipher, False, 18)
+    (plain, scans) = dut.RunEncryptOrDecrypt(cipher, False, 18)
     print("Plain Text : ", plain)
